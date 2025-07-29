@@ -3,13 +3,34 @@ import GlassInput from './GlassInput';
 import GlassSelect from './GlassSelect';
 import GlassCheckboxGroup from './GlassCheckboxGroup';
 import GlassButton from './GlassButton';
-import { useThemeContext } from '../context/ThemeContext';
 import { Loader } from 'lucide-react';
 import { fetchGeminiResult } from '../api/geminiApi';
 import ReactMarkdown from 'react-markdown';
 import GlassTimePicker from './GlassTimePicker';
+import { useThemeContext } from '../context/ThemeContext';
 
-const requiredQuestions = [
+// ---------- Question Types ----------
+type BaseQuestion = {
+  label: string;
+  name: string;
+  placeholder?: string;
+  type: 'text' | 'date' | 'time' | 'select' | 'checkbox';
+  required: boolean;
+};
+
+type SelectOrCheckboxQuestion = BaseQuestion & {
+  type: 'select' | 'checkbox';
+  options: string[];
+};
+
+type InputQuestion = BaseQuestion & {
+  type: 'text' | 'date' | 'time';
+};
+
+type Question = SelectOrCheckboxQuestion | InputQuestion;
+
+// ---------- Questions ----------
+const requiredQuestions: InputQuestion[] = [
   {
     label: 'Full Name',
     name: 'fullName',
@@ -26,7 +47,7 @@ const requiredQuestions = [
   },
 ];
 
-const optionalQuestions = [
+const optionalQuestions: Question[] = [
   {
     label: 'Time of Birth',
     name: 'birthTime',
@@ -45,16 +66,7 @@ const optionalQuestions = [
     label: 'How are you feeling right now?',
     name: 'currentFeeling',
     type: 'select',
-    options: [
-      'Calm',
-      'Lonely',
-      'Excited',
-      'Heartbroken',
-      'Confused',
-      'Hopeful',
-      'Lost',
-      'Motivated',
-    ],
+    options: ['Calm', 'Lonely', 'Excited', 'Heartbroken', 'Confused', 'Hopeful', 'Lost', 'Motivated'],
     required: false,
   },
   {
@@ -81,75 +93,61 @@ const optionalQuestions = [
   },
 ];
 
+// ---------- Component ----------
 const FormComponent = () => {
   const { darkMode } = useThemeContext();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [result, setResult] = useState<any>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleCheckboxChange = (name: string, option: string, checked: boolean) => {
     setFormData((prev) => {
       const currentValues = prev[name] || [];
-      if (checked) {
-        return {
-          ...prev,
-          [name]: [...currentValues, option],
-        };
-      } else {
-        return {
-          ...prev,
-          [name]: currentValues.filter((item: string) => item !== option),
-        };
-      }
+      return {
+        ...prev,
+        [name]: checked ? [...currentValues, option] : currentValues.filter((v: string) => v !== option),
+      };
     });
   };
 
   const validateForm = () => {
     for (const question of requiredQuestions) {
-      if (!formData[question.name] || formData[question.name].trim() === '') {
-        return false;
-      }
+      if (!formData[question.name] || formData[question.name].trim() === '') return false;
     }
     return true;
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) {
+      alert('Please fill in all required fields');
+      return;
+    }
 
+    setLoading(true);
+    try {
+      const apiResult = await fetchGeminiResult(formData);
+      setResult({
+        message: 'Thank you for your submission!',
+        data: apiResult,
+        timestamp: new Date().toLocaleString(),
+      });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error: unknown) {
+      alert('Something went wrong while generating the result.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  if (!validateForm()) {
-    alert('Please fill in all required fields');
-    return;
-  }
-  console.log('Form Data:', formData);
-
-  setLoading(true);
-
-  try {
-    const apiResult = await fetchGeminiResult(formData); // 🟢 API CALL HERE
-    setResult({
-      message: 'Thank you for your submission!',
-      data: apiResult, // You can keep `formData` if you want original
-      timestamp: new Date().toLocaleString(),
-    });
-  } catch (error) {
-    alert('Something went wrong while generating the result.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-  const renderField = (question: typeof requiredQuestions[0] | typeof optionalQuestions[0]) => {
+  const renderField = (question: Question) => {
     switch (question.type) {
       case 'text':
       case 'date':
@@ -166,56 +164,48 @@ const handleSubmit = async (e: React.FormEvent) => {
             darkMode={darkMode}
           />
         );
-
-        case 'time':
-          return (
-        <GlassTimePicker
-          key={question.name}
-          label={question.label}
-          name={question.name}
-          value={formData[question.name] || ''}
-          onChange={(e) => {
-            // e is a React.ChangeEvent<HTMLInputElement> simulated from GlassTimePicker
-            handleInputChange(e);
-          }}
-          darkMode={darkMode}
-        />
-      );
-
+      case 'time':
+        return (
+          <GlassTimePicker
+            key={question.name}
+            label={question.label}
+            name={question.name}
+            value={formData[question.name] || ''}
+            onChange={handleInputChange}
+            darkMode={darkMode}
+          />
+        );
       case 'select':
         return (
           <GlassSelect
             key={question.name}
             label={question.label}
             name={question.name}
-            options={question.options!}
+            options={question.options}
             value={formData[question.name] || ''}
             onChange={handleInputChange}
             darkMode={darkMode}
           />
         );
-
       case 'checkbox':
         return (
           <GlassCheckboxGroup
             key={question.name}
             label={question.label}
             name={question.name}
-            options={question.options!}
+            options={question.options}
             selectedValues={formData[question.name] || []}
             onChange={handleCheckboxChange}
             darkMode={darkMode}
           />
         );
-
       default:
         return null;
     }
   };
 
-
+  // ---------- Result View ----------
   if (result) {
-
     return (
       <div
         style={{
@@ -226,7 +216,6 @@ const handleSubmit = async (e: React.FormEvent) => {
           background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.25)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
           textAlign: 'center',
-          animation: 'fade-in 0.8s ease-out',
           color: darkMode ? '#fff' : '#000',
         }}
       >
@@ -236,53 +225,44 @@ const handleSubmit = async (e: React.FormEvent) => {
 
         <div
           style={{
-            textAlign: 'left',
             background: darkMode ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.3)',
             padding: 24,
             borderRadius: 16,
             marginBottom: 24,
+            textAlign: 'left',
           }}
         >
           <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Submitted Data:</h3>
-          <div
-  style={{
-    textAlign: 'left',
-    background: darkMode ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.3)',
-    padding: 24,
-    borderRadius: 16,
-    marginBottom: 24,
-  }}
->
-  <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Submitted Data:</h3>
-  {Object.entries(result.data.input).map(([key, value]) => (
-    <div key={key} style={{ marginBottom: 8, opacity: 0.8 }}>
-      <strong>{key}:</strong> {Array.isArray(value) ? value.join(', ') : value}
-    </div>
-  ))}
+          {Object.entries(result.data.input).map(([key, value]) => (
+            <div key={key} style={{ marginBottom: 8, opacity: 0.8 }}>
+              <strong>{key}:</strong>{' '}
+              {Array.isArray(value)
+                ? value.join(', ')
+                : typeof value === 'string' || typeof value === 'number'
+                ? value
+                : JSON.stringify(value)}
+            </div>
+          ))}
 
-  <div style={{ marginTop: 24 }}>
-    <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Gemini Recommendation:</h3>
-    <div
-      style={{
-        whiteSpace: 'pre-line',
-        background: darkMode ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.6)',
-        padding: 16,
-        borderRadius: 12,
-        fontSize: 16,
-        lineHeight: 1.5,
-      }}
-    >
-        <ReactMarkdown >{result.data.suggestion}</ReactMarkdown>
-      {/* {result.data.suggestion} */}
-    </div>
-  </div>
+          <div style={{ marginTop: 24 }}>
+            <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Gemini Recommendation:</h3>
+            <div
+              style={{
+                whiteSpace: 'pre-line',
+                background: darkMode ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.6)',
+                padding: 16,
+                borderRadius: 12,
+                fontSize: 16,
+                lineHeight: 1.5,
+              }}
+            >
+              <ReactMarkdown>{result.data.suggestion}</ReactMarkdown>
+            </div>
+          </div>
 
-  <div style={{ marginTop: 16, fontSize: 12, opacity: 0.6 }}>
-    Generated at: {result.timestamp}
-  </div>
-</div>
-
-      
+          <div style={{ marginTop: 16, fontSize: 12, opacity: 0.6 }}>
+            Generated at: {result.timestamp}
+          </div>
         </div>
 
         <GlassButton
@@ -298,6 +278,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     );
   }
 
+  // ---------- Form View ----------
   return (
     <form
       onSubmit={handleSubmit}
@@ -308,7 +289,6 @@ const handleSubmit = async (e: React.FormEvent) => {
         border: darkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.3)',
         background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.25)',
         boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-        animation: 'fade-in 0.8s ease-out',
         color: darkMode ? '#fff' : '#000',
       }}
     >
