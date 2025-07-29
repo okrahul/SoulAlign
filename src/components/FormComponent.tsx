@@ -5,6 +5,9 @@ import GlassCheckboxGroup from './GlassCheckboxGroup';
 import GlassButton from './GlassButton';
 import { useThemeContext } from '../context/ThemeContext';
 import { Loader } from 'lucide-react';
+import { fetchGeminiResult } from '../api/geminiApi';
+import ReactMarkdown from 'react-markdown';
+import GlassTimePicker from './GlassTimePicker';
 
 const requiredQuestions = [
   {
@@ -28,7 +31,7 @@ const optionalQuestions = [
     label: 'Time of Birth',
     name: 'birthTime',
     placeholder: 'e.g., 10:28 AM',
-    type: 'text',
+    type: 'time',
     required: false,
   },
   {
@@ -118,25 +121,33 @@ const FormComponent = () => {
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
 
-    if (!validateForm()) {
-      alert('Please fill in all required fields');
-      return;
-    }
 
-    setLoading(true);
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    setTimeout(() => {
-      setResult({
-        message: 'Thank you for your submission!',
-        data: formData,
-        timestamp: new Date().toLocaleString(),
-      });
-      setLoading(false);
-    }, 2000);
-  };
+  if (!validateForm()) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  console.log('Form Data:', formData);
+
+  setLoading(true);
+
+  try {
+    const apiResult = await fetchGeminiResult(formData); // 🟢 API CALL HERE
+    setResult({
+      message: 'Thank you for your submission!',
+      data: apiResult, // You can keep `formData` if you want original
+      timestamp: new Date().toLocaleString(),
+    });
+  } catch (error) {
+    alert('Something went wrong while generating the result.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const renderField = (question: typeof requiredQuestions[0] | typeof optionalQuestions[0]) => {
     switch (question.type) {
@@ -155,6 +166,21 @@ const FormComponent = () => {
             darkMode={darkMode}
           />
         );
+
+        case 'time':
+          return (
+        <GlassTimePicker
+          key={question.name}
+          label={question.label}
+          name={question.name}
+          value={formData[question.name] || ''}
+          onChange={(e) => {
+            // e is a React.ChangeEvent<HTMLInputElement> simulated from GlassTimePicker
+            handleInputChange(e);
+          }}
+          darkMode={darkMode}
+        />
+      );
 
       case 'select':
         return (
@@ -187,7 +213,9 @@ const FormComponent = () => {
     }
   };
 
+
   if (result) {
+
     return (
       <div
         style={{
@@ -216,14 +244,45 @@ const FormComponent = () => {
           }}
         >
           <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Submitted Data:</h3>
-          {Object.entries(result.data).map(([key, value]) => (
-            <div key={key} style={{ marginBottom: 8, opacity: 0.8 }}>
-              <strong>{key}:</strong> {Array.isArray(value) ? value.join(', ') : value}
-            </div>
-          ))}
-          <div style={{ marginTop: 16, fontSize: 12, opacity: 0.6 }}>
-            Generated at: {result.timestamp}
-          </div>
+          <div
+  style={{
+    textAlign: 'left',
+    background: darkMode ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.3)',
+    padding: 24,
+    borderRadius: 16,
+    marginBottom: 24,
+  }}
+>
+  <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Submitted Data:</h3>
+  {Object.entries(result.data.input).map(([key, value]) => (
+    <div key={key} style={{ marginBottom: 8, opacity: 0.8 }}>
+      <strong>{key}:</strong> {Array.isArray(value) ? value.join(', ') : value}
+    </div>
+  ))}
+
+  <div style={{ marginTop: 24 }}>
+    <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Gemini Recommendation:</h3>
+    <div
+      style={{
+        whiteSpace: 'pre-line',
+        background: darkMode ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.6)',
+        padding: 16,
+        borderRadius: 12,
+        fontSize: 16,
+        lineHeight: 1.5,
+      }}
+    >
+        <ReactMarkdown >{result.data.suggestion}</ReactMarkdown>
+      {/* {result.data.suggestion} */}
+    </div>
+  </div>
+
+  <div style={{ marginTop: 16, fontSize: 12, opacity: 0.6 }}>
+    Generated at: {result.timestamp}
+  </div>
+</div>
+
+      
         </div>
 
         <GlassButton

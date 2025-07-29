@@ -1,4 +1,3 @@
-import React from 'react';
 import { ThemeProvider, useThemeContext } from './context/ThemeContext';
 import ThemeToggle from './components/ThemeToggle';
 import FormComponent from './components/FormComponent';
@@ -9,7 +8,7 @@ import LogoDark from './assets/logo-dark.svg';
 import Footer from './components/Footer';
 
 
-const BackgroundWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const BackgroundWrapper = () => {
   const { darkMode } = useThemeContext();
 
   return (
@@ -100,7 +99,7 @@ const BackgroundWrapper: React.FC<{ children: React.ReactNode }> = ({ children }
 
 const App = () => (
   <ThemeProvider>
-    <BackgroundWrapper />
+    <BackgroundWrapper  />
   </ThemeProvider>
 );
 
